@@ -6,7 +6,7 @@ import { TestResultPublisher, TestSummary } from "./testresultspublisher";
 import { TestRunner } from "./testrunner";
 
 const telemetryArea: string = 'TestExecution';
-const telemetryFeature: string = 'PublishTestResultsTask';
+const telemetryFeature: string = 'ContainerStructureTestTask';
 const telemetryData: { [key: string]: any; } = <{ [key: string]: any; }>{};
 const defaultRunTitlePrefix: string = 'ContainerStructureTest_TestResults_';
 const buildString = "build";
@@ -36,13 +36,19 @@ async function run() {
 
         tl.setResourcePath(path.join(__dirname, 'task.json'));
 
-        // Establishing registry connection and pulling the container.
-        let containerRegistry = new ContainerRegistry(endpointId);
-        tl.debug(`Successfully finished docker login`);
-        const image = `${containerRegistry.getQualifiedImageName(repository, tag)}`;
-        tl.debug(`Image: ${image}`)
-        await containerRegistry.pull(repository, tag);
-        tl.debug(`Successfully finished docker pull`);
+        let image;
+        if (endpointId) {
+            // Establishing registry connection and pulling the container.
+            let containerRegistry = new ContainerRegistry(endpointId);
+            tl.debug(`Successfully finished docker login`);
+            image = `${containerRegistry.getQualifiedImageName(repository, tag)}`;
+            tl.debug(`Image: ${image}`);
+            await containerRegistry.pull(repository, tag);
+            tl.debug(`Successfully finished docker pull`);
+        } else {
+            image = `${repository}:${tag}`;
+            tl.debug(`Local image: ${image}`);
+        }
 
         // Running the container structure test on the above pulled container.
         const testRunner = new TestRunner(testFilePath, image);

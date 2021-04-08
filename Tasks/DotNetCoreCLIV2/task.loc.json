@@ -17,8 +17,8 @@
   "demands": [],
   "version": {
     "Major": 2,
-    "Minor": 158,
-    "Patch": 1
+    "Minor": 181,
+    "Patch": 0
   },
   "minimumAgentVersion": "2.115.0",
   "instanceNameFormat": "ms-resource:loc.instanceNameFormat",
@@ -123,6 +123,15 @@
       "visibleRule": "command = build || command = publish || command = run || command = test || command = custom",
       "required": false,
       "helpMarkDown": "ms-resource:loc.input.help.arguments"
+    },
+    {
+      "name": "restoreArguments",
+      "type": "string",
+      "label": "ms-resource:loc.input.label.restoreArguments",
+      "defaultValue": "",
+      "visibleRule": "command = restore",
+      "required": false,
+      "helpMarkDown": "ms-resource:loc.input.help.restoreArguments"
     },
     {
       "name": "publishTestResults",
@@ -300,7 +309,10 @@
       "defaultValue": "",
       "required": true,
       "helpMarkDown": "ms-resource:loc.input.help.feedPublish",
-      "visibleRule": "command = push && nuGetFeedType = internal"
+      "visibleRule": "command = push && nuGetFeedType = internal",
+      "properties": {
+        "EditableOptions": "True"
+      }
     },
     {
       "name": "publishPackageMetadata",
@@ -481,27 +493,28 @@
       "label": "ms-resource:loc.input.label.workingDirectory",
       "helpMarkDown": "ms-resource:loc.input.help.workingDirectory",
       "required": "false",
-      "groupName": "generalAdvanced"
+      "groupName": "generalAdvanced",
+      "visibleRule": "command != restore && command != push && command != pack"
     }
   ],
   "dataSourceBindings": [
     {
       "target": "feedRestore",
       "endpointId": "tfs:feed",
-      "endpointUrl": "{{endpoint.url}}/_apis/packaging/feeds",
+      "endpointUrl": "{{endpoint.url}}/_apis/packaging/feeds?includeUrls=False",
       "resultSelector": "jsonpath:$.value[*]",
       "resultTemplate": "{ \"Value\" : \"{{#if project}}{{{project.id}}}\\/{{/if}}{{{id}}}\", \"DisplayValue\" : \"{{{name}}}\" }"
     },
     {
       "target": "feedPublish",
       "endpointId": "tfs:feed",
-      "endpointUrl": "{{endpoint.url}}/_apis/packaging/feeds",
+      "endpointUrl": "{{endpoint.url}}/_apis/packaging/feeds?includeUrls=False",
       "resultSelector": "jsonpath:$.value[*]",
       "resultTemplate": "{ \"Value\" : \"{{#if project}}{{{project.id}}}\\/{{/if}}{{{id}}}\", \"DisplayValue\" : \"{{{name}}}\" }"
     }
   ],
   "execution": {
-    "Node": {
+    "Node10": {
       "target": "dotnetcore.js",
       "argumentFormat": ""
     }
@@ -557,6 +570,9 @@
     "NGCommon_UnabletoDetectNuGetVersion": "ms-resource:loc.messages.NGCommon_UnabletoDetectNuGetVersion",
     "NGCommon_UnableToFindTool": "ms-resource:loc.messages.NGCommon_UnableToFindTool",
     "Warning_SessionCreationFailed": "ms-resource:loc.messages.Warning_SessionCreationFailed",
-    "Warning_UpdatingNuGetVersion": "ms-resource:loc.messages.Warning_UpdatingNuGetVersion"
+    "Warning_UpdatingNuGetVersion": "ms-resource:loc.messages.Warning_UpdatingNuGetVersion",
+    "Net5Update": "ms-resource:loc.messages.Net5Update",
+    "Net5NugetVersionCompat": "ms-resource:loc.messages.Net5NugetVersionCompat",
+    "DeprecatedDotnet2_2_And_3_0": "ms-resource:loc.messages.DeprecatedDotnet2_2_And_3_0"
   }
 }

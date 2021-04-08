@@ -1,11 +1,23 @@
 import assert = require('assert');
 import path = require('path');
-import * as ttm from 'vsts-task-lib/mock-test';
+import * as ttm from 'azure-pipelines-task-lib/mock-test';
 
 describe('NodeTool Suite', function () {
     this.timeout(60000);
 
-    it('Succeeds when the first download is available', (done: MochaDone) => {
+    function runValidations(validator: () => void, tr, done) {
+        try {
+            validator();
+            done();
+        }
+        catch (error) {
+            console.log("STDERR", tr.stderr);
+            console.log("STDOUT", tr.stdout);
+            done(error);
+        }
+    }
+
+    it('Succeeds when the first download is available', (done: Mocha.Done) => {
         this.timeout(5000);
 
         let tp: string = path.join(__dirname, 'L0FirstDownloadSuccess.js');
@@ -13,13 +25,13 @@ describe('NodeTool Suite', function () {
 
         tr.run();
 
-        assert(tr.succeeded, 'NodeTool should have succeeded.');
-        assert(tr.stderr.length === 0, 'NodeTool should not have written to stderr');
-
-        done();
+        runValidations(() => {
+            assert(tr.succeeded, 'NodeTool should have succeeded.');
+            assert(tr.stderr.length === 0, 'NodeTool should not have written to stderr');
+        }, tr, done);
     });
 
-    it('Succeeds when the second download is available', (done: MochaDone) => {
+    it('Succeeds when the second download is available', (done: Mocha.Done) => {
         this.timeout(5000);
 
         let tp: string = path.join(__dirname, 'L0SecondDownloadSuccess.js');
@@ -27,13 +39,13 @@ describe('NodeTool Suite', function () {
 
         tr.run();
 
-        assert(tr.succeeded, 'NodeTool should have succeeded.');
-        assert(tr.stderr.length === 0, 'NodeTool should not have written to stderr');
-
-        done();
+        runValidations(() => {
+            assert(tr.succeeded, 'NodeTool should have succeeded.');
+            assert(tr.stderr.length === 0, 'NodeTool should not have written to stderr');
+        }, tr, done);
     });
 
-    it('Succeeds when the third download is available', (done: MochaDone) => {
+    it('Succeeds when the third download is available', (done: Mocha.Done) => {
         this.timeout(5000);
 
         let tp: string = path.join(__dirname, 'L0ThirdDownloadSuccess.js');
@@ -41,13 +53,13 @@ describe('NodeTool Suite', function () {
 
         tr.run();
 
-        assert(tr.succeeded, 'NodeTool should have succeeded.');
-        assert(tr.stderr.length === 0, 'NodeTool should not have written to stderr');
-
-        done();
+        runValidations(() => {
+            assert(tr.succeeded, 'NodeTool should have succeeded.');
+            assert(tr.stderr.length === 0, 'NodeTool should not have written to stderr');
+        }, tr, done);
     });
 
-    it('Removes "v" prefixes when evaluating latest version', (done: MochaDone) => {
+    it('Removes "v" prefixes when evaluating latest version', (done: Mocha.Done) => {
         this.timeout(5000);
 
         let tp: string = path.join(__dirname, 'L0GetsLatestVersion.js');
@@ -55,10 +67,10 @@ describe('NodeTool Suite', function () {
 
         tr.run();
 
-        assert(tr.succeeded, 'NodeTool should have succeeded.');
-        assert(tr.stderr.length === 0, 'NodeTool should not have written to stderr');
-
-        done();
+        runValidations(() => {
+            assert(tr.succeeded, 'NodeTool should have succeeded.');
+            assert(tr.stderr.length === 0, 'NodeTool should not have written to stderr');
+        }, tr, done);
     });
 
 });

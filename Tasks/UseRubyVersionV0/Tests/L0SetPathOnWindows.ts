@@ -1,7 +1,7 @@
 import * as os from 'os';
 import * as path from 'path';
-import * as tmrm from 'vsts-task-lib/mock-run';
-import * as ma from 'vsts-task-lib/mock-answer';
+import * as tmrm from 'azure-pipelines-task-lib/mock-run';
+import * as ma from 'azure-pipelines-task-lib/mock-answer';
 
 let taskPath = path.join(__dirname, '..', 'main.js');
 let tr: tmrm.TaskMockRunner = new tmrm.TaskMockRunner(taskPath);
@@ -9,7 +9,7 @@ let tr: tmrm.TaskMockRunner = new tmrm.TaskMockRunner(taskPath);
 tr.setInput('versionSpec', '2.4');
 tr.setInput('addToPath', 'true');
 
-tr.registerMock('vsts-task-tool-lib/tool', {
+tr.registerMock('azure-pipelines-tool-lib/tool', {
     findLocalTool: () => path.join('/', 'Ruby', '2.4.4'),
     prependPath: (s: string) => {
         console.log('##vso[task.prependpath]' + s);

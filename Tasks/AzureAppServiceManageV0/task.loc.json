@@ -18,8 +18,8 @@
   "demands": [],
   "version": {
     "Major": 0,
-    "Minor": 2,
-    "Patch": 61
+    "Minor": 184,
+    "Patch": 1
   },
   "minimumAgentVersion": "1.102.0",
   "instanceNameFormat": "ms-resource:loc.instanceNameFormat",
@@ -285,7 +285,7 @@
     }
   ],
   "execution": {
-    "Node": {
+    "Node10": {
       "target": "azureappservicemanage.js"
     }
   },
@@ -430,6 +430,7 @@
     "CouldNotFetchAccessTokenforMSIStatusCode": "ms-resource:loc.messages.CouldNotFetchAccessTokenforMSIStatusCode",
     "ASE_SSLIssueRecommendation": "ms-resource:loc.messages.ASE_SSLIssueRecommendation",
     "ExpiredServicePrincipal": "ms-resource:loc.messages.ExpiredServicePrincipal",
-    "SwapWithPreviewNotsupported": "ms-resource:loc.messages.SwapWithPreviewNotsupported"
+    "SwapWithPreviewNotsupported": "ms-resource:loc.messages.SwapWithPreviewNotsupported",
+    "InvalidActionForPublishProfileEndpoint": "ms-resource:loc.messages.InvalidActionForPublishProfileEndpoint"
   }
 }

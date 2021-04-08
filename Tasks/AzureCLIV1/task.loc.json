@@ -19,7 +19,7 @@
   "demands": [],
   "version": {
     "Major": 1,
-    "Minor": 156,
+    "Minor": 164,
     "Patch": 0
   },
   "minimumAgentVersion": "2.0.0",
@@ -136,7 +136,7 @@
     }
   ],
   "execution": {
-    "Node": {
+    "Node10": {
       "target": "azureclitask.js",
       "argumentFormat": ""
     }

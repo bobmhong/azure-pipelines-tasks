@@ -1,12 +1,15 @@
+import * as ParameterParser from 'azure-pipelines-tasks-azurermdeploycommon/operations/ParameterParserUtility'
+
 import { AzureRmWebAppDeploymentProvider } from './AzureRmWebAppDeploymentProvider';
-import tl = require('azure-pipelines-task-lib/task');
-import * as ParameterParser from 'azurermdeploycommon/operations/ParameterParserUtility'
 import { DeploymentType } from '../taskparameters';
-import { PackageType } from 'azurermdeploycommon/webdeployment-common/packageUtility';
-import { addReleaseAnnotation } from 'azurermdeploycommon/operations/ReleaseAnnotationUtility';
-import { FileTransformsUtility } from 'azurermdeploycommon/operations/FileTransformsUtility.js';
-var deployUtility = require('azurermdeploycommon/webdeployment-common/utility.js');
-var zipUtility = require('azurermdeploycommon/webdeployment-common/ziputility.js');
+import { FileTransformsUtility } from 'azure-pipelines-tasks-azurermdeploycommon/operations/FileTransformsUtility.js';
+import { PackageType } from 'azure-pipelines-tasks-azurermdeploycommon/webdeployment-common/packageUtility';
+import { addReleaseAnnotation } from 'azure-pipelines-tasks-azurermdeploycommon/operations/ReleaseAnnotationUtility';
+
+import tl = require('azure-pipelines-task-lib/task');
+
+var deployUtility = require('azure-pipelines-tasks-azurermdeploycommon/webdeployment-common/utility.js');
+var zipUtility = require('azure-pipelines-tasks-azurermdeploycommon/webdeployment-common/ziputility.js');
 
 const oldRunFromZipAppSetting: string = '-WEBSITE_RUN_FROM_ZIP';
 const runFromZipAppSetting: string = '-WEBSITE_RUN_FROM_PACKAGE 1';
@@ -35,26 +38,36 @@ export class WindowsWebAppRunFromZipProvider extends AzureRmWebAppDeploymentProv
             tl.debug("Compressed folder into zip " +  webPackage);
         }
 
-        tl.debug("Initiated deployment via kudu service for webapp package : ");
-        
-        var addCustomApplicationSetting = ParameterParser.parse(runFromZipAppSetting);
-        var deleteCustomApplicationSetting = ParameterParser.parse(oldRunFromZipAppSetting);
-        var isNewValueUpdated: boolean = await this.appServiceUtility.updateAndMonitorAppSettings(addCustomApplicationSetting, deleteCustomApplicationSetting);
+        tl.debug("Initiated deployment via kudu service for webapp package : " + webPackage);
+        if (!!this.appServiceUtility) {
+            var addCustomApplicationSetting = ParameterParser.parse(runFromZipAppSetting);
+            var deleteCustomApplicationSetting = ParameterParser.parse(oldRunFromZipAppSetting);
+            var isNewValueUpdated: boolean = await this.appServiceUtility.updateAndMonitorAppSettings(addCustomApplicationSetting, deleteCustomApplicationSetting);
 
-        if(!isNewValueUpdated) {
+            if(!isNewValueUpdated) {
+                await this.kuduServiceUtility.warmpUp();
+            }
+        } else {
             await this.kuduServiceUtility.warmpUp();
         }
 
         await this.kuduServiceUtility.deployUsingRunFromZip(webPackage, 
-            { slotName: this.appService.getSlot() });
+            { slotName: this.slotName });
 
         await this.PostDeploymentStep();
     }
-    
-    public async UpdateDeploymentStatus(isDeploymentSuccess: boolean) {
-        await addReleaseAnnotation(this.taskParams.azureEndpoint, this.appService, isDeploymentSuccess);
 
-        let appServiceApplicationUrl: string = await this.appServiceUtility.getApplicationURL();
+    public async UpdateDeploymentStatus(isDeploymentSuccess: boolean) {
+        if(!!this.appService) {
+            await addReleaseAnnotation(this.taskParams.azureEndpoint, this.appService, isDeploymentSuccess);
+        }
+
+        let appServiceApplicationUrl: string;
+        if (!!this.appServiceUtility) {
+            appServiceApplicationUrl = await this.appServiceUtility.getApplicationURL();
+        } else {
+            appServiceApplicationUrl = this.publishProfileScmCredentials.applicationUrl;
+        }
         console.log(tl.loc('AppServiceApplicationURL', appServiceApplicationUrl));
         tl.setVariable('AppServiceApplicationUrl', appServiceApplicationUrl);
     }

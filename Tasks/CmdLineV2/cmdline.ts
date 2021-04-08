@@ -1,9 +1,8 @@
 import fs = require('fs');
 import path = require('path');
-import os = require('os');
 import tl = require('azure-pipelines-task-lib/task');
 import tr = require('azure-pipelines-task-lib/toolrunner');
-var uuidV4 = require('uuid/v4');
+import { v4 as uuidV4 } from 'uuid';
 
 async function run() {
     try {
@@ -14,13 +13,17 @@ async function run() {
         let script: string = tl.getInput('script', false) || '';
         let workingDirectory = tl.getPathInput('workingDirectory', /*required*/ true, /*check*/ true);
 
+        if (fs.existsSync(script)) {
+            script = `exec ${script}`;
+        }
+
         // Write the script to disk.
         console.log(tl.loc('GeneratingScript'));
         tl.assertAgent('2.115.0');
         let tempDirectory = tl.getVariable('agent.tempDirectory');
         tl.checkPath(tempDirectory, `${tempDirectory} (agent.tempDirectory)`);
         let filePath = path.join(tempDirectory, uuidV4() + '.sh');
-        await fs.writeFileSync(
+        fs.writeFileSync(
             filePath,
             script, // Don't add a BOM. It causes the script to fail on some operating systems (e.g. on Ubuntu 14).
             { encoding: 'utf8' });
@@ -37,7 +40,7 @@ async function run() {
             .arg('--noprofile')
             .arg(`--norc`)
             .arg(filePath);
-        let options = <tr.IExecOptions>{
+        let options: tr.IExecOptions = {
             cwd: workingDirectory,
             failOnStdErr: false,
             errStream: process.stdout, // Direct all output to STDOUT, otherwise the output may appear out
@@ -47,11 +50,18 @@ async function run() {
 
         // Listen for stderr.
         let stderrFailure = false;
+        const aggregatedStderr: string[] = [];
         if (failOnStderr) {
-            bash.on('stderr', (data) => {
+            bash.on('stderr', (data: Buffer) => {
                 stderrFailure = true;
+                aggregatedStderr.push(data.toString('utf8'));
             });
         }
+
+        process.on("SIGINT", () => {
+            tl.debug('Started cancellation of executing script');
+            bash.killChildProcess();
+        });
 
         // Run bash.
         let exitCode: number = await bash.exec(options);
@@ -67,6 +77,9 @@ async function run() {
         // Fail on stderr.
         if (stderrFailure) {
             tl.error(tl.loc('JS_Stderr'));
+            aggregatedStderr.forEach((err: string) => {
+                tl.error(err);
+            });
             result = tl.TaskResult.Failed;
         }
 

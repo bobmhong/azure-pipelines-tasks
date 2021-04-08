@@ -1,34 +1,52 @@
 import path = require('path');
-import tl = require('vsts-task-lib/task');
-import tr = require('vsts-task-lib/toolrunner');
+import tl = require('azure-pipelines-task-lib/task');
+import tr = require('azure-pipelines-task-lib/toolrunner');
+import minimatch = require('minimatch');
+import os = require('os');
 
 // archiveFilePatterns is a multiline input containing glob patterns
 var archiveFilePatterns: string[] = tl.getDelimitedInput('archiveFilePatterns', '\n', true);
 var destinationFolder: string = path.normalize(tl.getPathInput('destinationFolder', true, false).trim());
 var cleanDestinationFolder: boolean = tl.getBoolInput('cleanDestinationFolder', false);
+var overwriteExistingFiles: boolean = tl.getBoolInput('overwriteExistingFiles', false);
+const customPathToSevenZipTool: string = tl.getInput('pathToSevenZipTool', false);
 
 var repoRoot: string = tl.getVariable('System.DefaultWorkingDirectory');
 tl.debug('repoRoot: ' + repoRoot);
 
-var win = tl.osType().match(/^Win/);
+const win: boolean = tl.getPlatform() == tl.Platform.Windows;
 tl.debug('win: ' + win);
 
 // extractors
 var xpTarLocation: string;
 var xpUnzipLocation: string;
 // 7zip
-var xpSevenZipLocation: string;
-var winSevenZipLocation: string = path.join(__dirname, '7zip/7z.exe');
+let sevenZipLocation: string;
+let defaultWinSevenZipLocation: string = path.join(__dirname, '7zip/7z.exe');
 
 function getSevenZipLocation(): string {
-    if (win) {
-        return winSevenZipLocation;
-    } else {
-        if (typeof xpSevenZipLocation == "undefined") {
-            xpSevenZipLocation = tl.which('7z', true);
-        }
-        return xpSevenZipLocation;
+    if (customPathToSevenZipTool) {
+        tl.debug('Get 7z tool from user defined location');
+        return customPathToSevenZipTool;
     }
+    
+    if (win) {
+        if (!sevenZipLocation) {
+            tl.debug('Try to resolve preinstalled 7z location');
+            // we avoid check of tool existence to not fail the task if 7z is not preinstalled in system
+            sevenZipLocation = tl.which('7z', false);
+        }
+
+        // return default location of the 7z which is bundled with the task in case the user didn't pass a custom path or the agent doesn't contain a preinstalled tool
+        return sevenZipLocation || defaultWinSevenZipLocation;
+    }
+
+    if (!sevenZipLocation) {
+        tl.debug('Try to resolve preinstalled 7z location');
+        sevenZipLocation = tl.which('7z', true);
+    }
+
+    return sevenZipLocation;
 }
 
 function findFiles(): string[] {
@@ -82,7 +100,7 @@ function findFiles(): string[] {
             var allFiles = tl.find(parseResult.directory);
             tl.debug('Candidates found for match: ' + allFiles.length);
 
-            var matched = tl.match(allFiles, parseResult.search, matchOptions);
+            var matched = minimatch.match(allFiles, path.join(parseResult.directory, parseResult.search), matchOptions);
 
             // ensure only files are added, since our search results may include directories
             for (var j = 0; j < matched.length; j++) {
@@ -188,6 +206,9 @@ function unzipExtract(file, destinationFolder) {
         xpUnzipLocation = tl.which('unzip', true);
     }
     var unzip = tl.tool(xpUnzipLocation);
+    if (overwriteExistingFiles) {
+        unzip.arg('-o');
+    }
     unzip.arg(file);
     unzip.arg('-d');
     unzip.arg(destinationFolder);
@@ -197,6 +218,9 @@ function unzipExtract(file, destinationFolder) {
 function sevenZipExtract(file, destinationFolder) {
     console.log(tl.loc('SevenZipExtractFile', file));
     var sevenZip = tl.tool(getSevenZipLocation());
+    if (overwriteExistingFiles) {
+        sevenZip.arg('-aoa');
+    }
     sevenZip.arg('x');
     sevenZip.arg('-o' + destinationFolder);
     sevenZip.arg(file);
@@ -209,14 +233,18 @@ function tarExtract(file, destinationFolder) {
         xpTarLocation = tl.which('tar', true);
     }
     var tar = tl.tool(xpTarLocation);
-    tar.arg('-xvf'); // tar will correctly handle compression types outlined in isTar()
+    if (overwriteExistingFiles) {
+        tar.arg('-xvf'); // tar will correctly handle compression types outlined in isTar()
+    } else {
+        tar.arg('-xvkf');
+    }
     tar.arg(file);
     tar.arg('-C');
     tar.arg(destinationFolder);
     return handleExecResult(tar.execSync(), file);
 }
 
-function handleExecResult(execResult: tr.IExecResult, file) {
+function handleExecResult(execResult: tr.IExecSyncResult, file) {
     if (execResult.code != tl.TaskResult.Succeeded) {
         tl.debug('execResult: ' + JSON.stringify(execResult));
         failTask(tl.loc('ExtractFileFailedMsg', file, execResult.code, execResult.stdout, execResult.stderr, execResult.error));
@@ -272,7 +300,7 @@ function extractFiles(files: string[]) {
                         sevenZipExtract(tempTar, destinationFolder);
                         // 3 cleanup temp folder
                         console.log(tl.loc('RemoveTempDir', tempFolder));
-                        tl.rmRF(tempFolder, false);
+                        tl.rmRF(tempFolder);
                     } else {
                         failTask(tl.loc('ExtractFailedCannotCreate', file, tempFolder));
                     }
@@ -298,6 +326,11 @@ function doWork() {
 
         // Find matching archive files
         var files: string[] = findFiles();
+
+        if (files.length === 0) {
+            tl.warning(tl.loc('NoFilesFound'));
+        }
+
         console.log(tl.loc('FoundFiles', files.length));
         for (var i = 0; i < files.length; i++) {
             console.log(files[i]);
@@ -306,7 +339,7 @@ function doWork() {
         // Clean the destination folder before extraction?
         if (cleanDestinationFolder && tl.exist(destinationFolder)) {
             console.log(tl.loc('CleanDestDir', destinationFolder));
-            tl.rmRF(destinationFolder, false);
+            tl.rmRF(destinationFolder);
         }
 
         // Create the destination folder if it doesn't exist
@@ -319,7 +352,7 @@ function doWork() {
         tl.setResult(tl.TaskResult.Succeeded, tl.loc('SucceedMsg'));
     } catch (e) {
         tl.debug(e.message);
-        tl._writeError(e);
+        process.stderr.write(e + os.EOL);
         tl.setResult(tl.TaskResult.Failed, e.message);
     }
 }

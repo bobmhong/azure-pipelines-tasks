@@ -1,8 +1,8 @@
 import fs = require('fs');
 import path = require('path');
 import os = require('os');
-import tl = require('vsts-task-lib/task');
-import tr = require('vsts-task-lib/toolrunner');
+import tl = require('azure-pipelines-task-lib/task');
+import tr = require('azure-pipelines-task-lib/toolrunner');
 var uuidV4 = require('uuid/v4');
 
 async function run() {
@@ -19,6 +19,7 @@ async function run() {
             default:
                 throw new Error(tl.loc('JS_InvalidErrorActionPreference', input_errorActionPreference));
         }
+        let input_showWarnings = tl.getBoolInput('showWarnings', false);
         let input_failOnStderr = tl.getBoolInput('failOnStderr', false);
         let input_ignoreLASTEXITCODE = tl.getBoolInput('ignoreLASTEXITCODE', false);
         let input_workingDirectory = tl.getPathInput('workingDirectory', /*required*/ true, /*check*/ true);
@@ -34,24 +35,40 @@ async function run() {
 
             input_arguments = tl.getInput('arguments') || '';
         }
-        else if(input_targetType.toUpperCase() == 'INLINE') {
+        else if (input_targetType.toUpperCase() == 'INLINE') {
             input_script = tl.getInput('script', false) || '';
         }
         else {
             throw new Error(tl.loc('PS_InvalidTargetType', input_targetType));
         }
+        const input_runScriptInSeparateScope = tl.getBoolInput('runScriptInSeparateScope');
 
         // Generate the script contents.
         console.log(tl.loc('GeneratingScript'));
         let contents: string[] = [];
         contents.push(`$ErrorActionPreference = '${input_errorActionPreference}'`);
+        let script = '';
         if (input_targetType.toUpperCase() == 'FILEPATH') {
-            contents.push(`. '${input_filePath.replace("'", "''")}' ${input_arguments}`.trim());
-            console.log(tl.loc('JS_FormattedCommand', contents[contents.length - 1]));
+            script = `. '${input_filePath.replace(/'/g, "''")}' ${input_arguments}`.trim();
+        } else {
+            script = `${input_script}`;
         }
-        else {
-            contents.push(input_script);
+        if (input_showWarnings) {
+            script = `
+                $warnings = New-Object System.Collections.ObjectModel.ObservableCollection[System.Management.Automation.WarningRecord];
+                Register-ObjectEvent -InputObject $warnings -EventName CollectionChanged -Action {
+                    if($Event.SourceEventArgs.Action -like "Add"){
+                        $Event.SourceEventArgs.NewItems | ForEach-Object {
+                            Write-Host "##vso[task.logissue type=warning;]$_";
+                        }
+                    }
+                };
+                Invoke-Command {${script}} -WarningVariable +warnings;
+            `;
         }
+        contents.push(script);
+        // log with detail to avoid a warning output.
+        tl.logDetail(uuidV4(), tl.loc('JS_FormattedCommand', script), null, 'command', 'command', 0);
 
         if (!input_ignoreLASTEXITCODE) {
             contents.push(`if (!(Test-Path -LiteralPath variable:\LASTEXITCODE)) {`);
@@ -67,7 +84,7 @@ async function run() {
         let tempDirectory = tl.getVariable('agent.tempDirectory');
         tl.checkPath(tempDirectory, `${tempDirectory} (agent.tempDirectory)`);
         let filePath = path.join(tempDirectory, uuidV4() + '.ps1');
-        await fs.writeFile(
+        fs.writeFileSync(
             filePath,
             '\ufeff' + contents.join(os.EOL), // Prepend the Unicode BOM character.
             { encoding: 'utf8' });            // Since UTF8 encoding is specified, node will
@@ -80,12 +97,14 @@ async function run() {
         // Note, use "-Command" instead of "-File" to match the Windows implementation. Refer to
         // comment on Windows implementation for an explanation why "-Command" is preferred.
         console.log('========================== Starting Command Output ===========================');
+        
+        const executionOperator = input_runScriptInSeparateScope ? '&' : '.';
         let powershell = tl.tool(tl.which('pwsh') || tl.which('powershell') || tl.which('pwsh', true))
             .arg('-NoLogo')
             .arg('-NoProfile')
             .arg('-NonInteractive')
             .arg('-Command')
-            .arg(`. '${filePath.replace("'", "''")}'`);
+            .arg(`${executionOperator} '${filePath.replace(/'/g, "''")}'`);
         let options = <tr.IExecOptions>{
             cwd: input_workingDirectory,
             failOnStdErr: false,
@@ -96,15 +115,16 @@ async function run() {
 
         // Listen for stderr.
         let stderrFailure = false;
+        const aggregatedStderr: string[] = [];
         if (input_failOnStderr) {
-            powershell.on('stderr', (data) => {
+            powershell.on('stderr', (data: Buffer) => {
                 stderrFailure = true;
+                aggregatedStderr.push(data.toString('utf8'));
             });
         }
 
         // Run bash.
         let exitCode: number = await powershell.exec(options);
-
         // Fail on exit code.
         if (exitCode !== 0) {
             tl.setResult(tl.TaskResult.Failed, tl.loc('JS_ExitCode', exitCode));
@@ -113,6 +133,9 @@ async function run() {
         // Fail on stderr.
         if (stderrFailure) {
             tl.setResult(tl.TaskResult.Failed, tl.loc('JS_Stderr'));
+            aggregatedStderr.forEach((err: string) => {
+                tl.error(err);
+            });
         }
     }
     catch (err) {

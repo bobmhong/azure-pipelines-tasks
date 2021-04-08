@@ -1,6 +1,6 @@
 {
   "name": "msbuildhelpers",
-  "version": "1.0.0",
+  "version": "1.183.0",
   "description": "Azure Pipelines tasks MSBuild helpers",
   "main": "msbuildhelpers.js",
   "scripts": {
@@ -17,6 +17,6 @@
   },
   "homepage": "https://github.com/Microsoft/azure-pipelines-tasks#readme",
   "dependencies": {
-    "vsts-task-lib": "^2.0.3-preview"
+    "azure-pipelines-task-lib": "^2.9.3"
   }
 }
